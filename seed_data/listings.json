@@ -1,0 +1,46 @@
+[
+  {
+    "listing_code": "SEA-201",
+    "title": "Beach View Studio",
+    "description": "A bright studio near Cox's Bazar sea beach with balcony views and fast WiFi.",
+    "location": "Cox's Bazar",
+    "area": "Kolatoli",
+    "nightly_price_bdt": 6800,
+    "max_guests": 2,
+    "amenities": ["WiFi", "AC", "Hot Water", "Breakfast"],
+    "is_active": true
+  },
+  {
+    "listing_code": "SEA-318",
+    "title": "Kolatoli Family Suite",
+    "description": "A family-friendly suite close to the beach road and restaurants.",
+    "location": "Cox's Bazar",
+    "area": "Kolatoli",
+    "nightly_price_bdt": 8500,
+    "max_guests": 4,
+    "amenities": ["WiFi", "AC", "Kitchenette", "Parking"],
+    "is_active": true
+  },
+  {
+    "listing_code": "DHK-112",
+    "title": "Dhanmondi City Nest",
+    "description": "A clean apartment stay for short trips in central Dhaka.",
+    "location": "Dhaka",
+    "area": "Dhanmondi",
+    "nightly_price_bdt": 5600,
+    "max_guests": 3,
+    "amenities": ["WiFi", "AC", "Elevator", "Work Desk"],
+    "is_active": true
+  },
+  {
+    "listing_code": "SYL-404",
+    "title": "Sylhet Tea Garden Retreat",
+    "description": "A peaceful stay near the tea estates with garden views.",
+    "location": "Sylhet",
+    "area": "Zindabazar",
+    "nightly_price_bdt": 6200,
+    "max_guests": 2,
+    "amenities": ["WiFi", "AC", "Breakfast", "Airport Pickup"],
+    "is_active": true
+  }
+]
