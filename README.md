@@ -3,111 +3,145 @@
 ## 1. Architecture Document
 
 ### 1.1 System Overview
-StayEase uses a small FastAPI backend to receive guest messages, load conversation history from PostgreSQL, and invoke a LangGraph agent that is limited to three actions: search properties, return listing details, and create a booking. The LangGraph agent uses the OpenAI Responses API as its reasoning layer and calls internal tools for property search, details lookup, and booking creation. Any request outside those three supported actions is routed to human handoff instead of being handled automatically. OpenAI documents the Responses API as its primary interface for stateful responses and tool use, which fits this bounded agent design well.
+StayEase is a focused guest messaging backend for a short-term rental platform in Bangladesh. A guest sends a message to the FastAPI backend, the request is passed into a LangGraph agent, and the agent uses the OpenAI Responses API to decide whether to search properties, return listing details, create a booking, or escalate unsupported requests to a human. PostgreSQL stores listings, bookings, and conversation history so the agent can respond with structured, stateful results.
 
 ```mermaid
 flowchart LR
-    G[Guest Client / Frontend]
-    F[FastAPI Backend]
-    L[LangGraph Agent]
-    O[OpenAI Responses API]
-    P[(PostgreSQL)]
+    Guest[Guest / Frontend]
+    API[FastAPI Backend]
+    Graph[LangGraph Agent]
+    OpenAI[OpenAI Responses API]
+    DB[(PostgreSQL)]
 
-    G -->|POST /message| F
-    F -->|load/save conversation| P
-    F -->|invoke graph| L
-    L -->|reason + tool decisions| O
-    L -->|search/details/booking tools| P
-    L -->|final agent reply| F
-    F -->|JSON response| G
+    Guest -->|POST /api/chat/{conversation_id}/message| API
+    API -->|load and save history| DB
+    API -->|invoke agent| Graph
+    Graph -->|reasoning and tool decisions| OpenAI
+    Graph -->|search, details, booking data| DB
+    Graph -->|final reply| API
+    API -->|JSON response| Guest
 ```
 
 ### 1.2 Conversation Flow
-Example guest message: **"I need a room in Cox's Bazar for 2 nights for 2 guests."**
+Example user request: **"I need a room in Cox's Bazar for 2 nights for 2 guests."**
 
-1. The frontend sends the message to `POST /api/chat/{conversation_id}/message`.
-2. FastAPI stores the guest message in `conversations` and loads earlier turns for that `conversation_id`.
-3. FastAPI builds the LangGraph state with the raw message, conversation history, and empty search/booking fields.
-4. The router node sends the state to the OpenAI Responses API with a strict system instruction: only support `search`, `details`, and `book`; otherwise escalate.
-5. The model classifies the intent as `search` and extracts:
+1. The guest message reaches `POST /api/chat/{conversation_id}/message`.
+2. FastAPI loads prior conversation history from PostgreSQL and passes the latest turn into the LangGraph agent.
+3. The routing node sends the guest message and recent context to the OpenAI Responses API with instructions that the agent may only search, show listing details, create a booking, or escalate.
+4. The model classifies the request as a **search** intent and extracts:
    - `location = "Cox's Bazar"`
-   - `check_in` and `check_out` or `nights = 2` pending date clarification
    - `guest_count = 2`
-6. If dates are complete, the graph calls `search_available_properties`.
-7. The search tool queries `listings` and filters by:
-   - location match
-   - capacity >= 2
-   - availability for the requested stay
-8. The tool returns a normalized list such as:
+   - `stay_length = 2 nights`
+5. If the exact stay dates are already present in prior context, the graph continues directly to the search tool. If the start date is missing, the agent asks one short follow-up question, then resumes the same flow after the guest provides the date.
+6. The `search_available_properties` tool queries PostgreSQL for active listings in Cox's Bazar that:
+   - match the location
+   - can host at least 2 guests
+   - are not already booked for the requested stay window
+7. The tool returns structured search results such as:
    - `SEA-201` — Beach View Studio — `BDT 6,800/night`
    - `SEA-318` — Kolatoli Family Suite — `BDT 8,500/night`
-   - `SEA-122` — Budget Couple Room — `BDT 4,900/night`
-9. The response node converts tool output into guest-friendly text with price, neighborhood, max guests, and booking cue.
-10. FastAPI stores the assistant reply in `conversations` and returns the JSON payload to the frontend.
+8. The agent sends those tool results back into the OpenAI Responses API.
+9. The model turns the structured tool output into a guest-friendly final answer with prices and listing IDs.
+10. FastAPI stores both the guest turn and assistant reply in `conversations` and returns the response payload to the frontend.
 
 ### 1.3 LangGraph State Design
 
-| Field | Type | Why it exists |
+| Field | Type | Why it is needed |
 |---|---|---|
-| `conversation_id` | `str` | Ties one graph run to a persisted chat thread. |
-| `messages` | `list[dict[str, str]]` | Preserves guest/assistant turns used for reasoning and API responses. |
-| `latest_user_message` | `str` | Gives each node a stable input for intent detection and extraction. |
-| `intent` | `Literal["search", "details", "book", "escalate"] \| None` | Stores the only four routing outcomes allowed in the graph. |
-| `search_params` | `dict[str, Any]` | Holds normalized search inputs like location, dates, and guest count. |
-| `selected_listing_id` | `str \| None` | Tracks which property the guest is asking about or booking. |
-| `booking_request` | `dict[str, Any]` | Holds booking payload fields before tool execution. |
-| `tool_result` | `dict[str, Any] \| None` | Carries structured output from the last tool call. |
-| `response_text` | `str \| None` | Stores the final assistant reply returned to FastAPI. |
-| `escalation_reason` | `str \| None` | Explains why unsupported requests must go to a human. |
+| `conversation_id` | `str` | Identifies the chat thread across API requests and persistence. |
+| `messages` | `list[dict[str, str]]` | Carries recent user and assistant turns so the graph has conversation context. |
+| `latest_user_message` | `str` | Gives the graph a stable copy of the newest guest message to classify. |
+| `intent` | `Literal["search", "details", "book", "escalate"] \| None` | Stores the route selected by the graph. |
+| `search_params` | `dict[str, Any]` | Holds normalized search inputs such as location, dates, and guest count. |
+| `selected_listing_id` | `str \| None` | Tracks which listing the guest is asking about or booking. |
+| `booking_request` | `dict[str, Any]` | Holds the structured payload used by the booking tool. |
+| `tool_result` | `dict[str, Any] \| None` | Stores the latest tool response for later formatting. |
+| `response_text` | `str \| None` | Stores the final assistant reply before it is returned to FastAPI. |
+| `escalation_reason` | `str \| None` | Captures why the request should be handed to a human. |
 
 ### 1.4 Node Design
 
 | Node | What it does | Updates in state | Next node |
 |---|---|---|---|
-| `route_request` | Detects whether the guest wants search, details, booking, or human escalation. | `intent`, `search_params`, `selected_listing_id`, `booking_request`, `escalation_reason` | `run_search_tool`, `run_details_tool`, `run_booking_tool`, or `finalize_response` |
-| `run_search_tool` | Calls property search for valid location, dates, and guest count. | `tool_result` | `finalize_response` |
-| `run_details_tool` | Fetches detailed information for one listing. | `tool_result` | `finalize_response` |
-| `run_booking_tool` | Creates a booking for the selected listing and guest request. | `tool_result` | `finalize_response` |
-| `finalize_response` | Formats a guest-safe response or human handoff message. | `response_text`, `messages` | `END` |
+| `route_request` | Detects whether the request is search, details, booking, or escalation. | `intent`, `search_params`, `selected_listing_id`, `booking_request`, `escalation_reason` | `run_search_tool`, `run_details_tool`, `run_booking_tool`, or `finalize_response` |
+| `run_search_tool` | Calls the property search tool with normalized stay filters. | `tool_result` | `finalize_response` |
+| `run_details_tool` | Calls the listing details tool for a selected property. | `tool_result` | `finalize_response` |
+| `run_booking_tool` | Calls the booking tool when the guest confirms a reservation. | `tool_result` | `finalize_response` |
+| `finalize_response` | Turns tool output or escalation state into the final assistant message. | `response_text`, `messages` | `END` |
 
 ### 1.5 Tool Definitions
 
 #### `search_available_properties`
-- **Inputs**
+- **Input parameters**
   - `location: str`
   - `check_in: date`
   - `check_out: date`
   - `guest_count: int`
-- **Output**
-  - `{ "properties": [ { "listing_id": str, "title": str, "location": str, "price_bdt": int, "currency": "BDT", "max_guests": int, "available": bool } ], "count": int }`
+- **Output format**
+```json
+{
+  "properties": [
+    {
+      "listing_id": "SEA-201",
+      "title": "Beach View Studio",
+      "location": "Cox's Bazar",
+      "price_bdt": 6800,
+      "currency": "BDT",
+      "max_guests": 2,
+      "available": true
+    }
+  ],
+  "count": 1
+}
+```
 - **Used when**
-  - The agent has a search request with location, stay dates, and guest count.
+  - The agent has enough information to search for available stays.
 
 #### `get_listing_details`
-- **Inputs**
+- **Input parameters**
   - `listing_id: str`
-- **Output**
-  - `{ "listing_id": str, "title": str, "description": str, "location": str, "nightly_price_bdt": int, "amenities": list[str], "max_guests": int, "check_in_time": str, "check_out_time": str }`
+- **Output format**
+```json
+{
+  "listing_id": "SEA-201",
+  "title": "Beach View Studio",
+  "description": "A clean studio near the sea beach with balcony access.",
+  "location": "Cox's Bazar",
+  "nightly_price_bdt": 6800,
+  "amenities": ["WiFi", "AC", "Hot Water", "Breakfast"],
+  "max_guests": 2,
+  "check_in_time": "14:00",
+  "check_out_time": "11:00"
+}
+```
 - **Used when**
-  - The guest asks about one specific property.
+  - The guest asks about a specific listing.
 
 #### `create_booking`
-- **Inputs**
+- **Input parameters**
   - `listing_id: str`
   - `check_in: date`
   - `check_out: date`
   - `guest_count: int`
   - `guest_name: str`
   - `guest_email: EmailStr`
-- **Output**
-  - `{ "booking_id": str, "status": "confirmed", "listing_id": str, "total_price_bdt": int, "currency": "BDT" }`
+- **Output format**
+```json
+{
+  "booking_id": "BK-20260514-0001",
+  "status": "confirmed",
+  "listing_id": "SEA-201",
+  "total_price_bdt": 13600,
+  "currency": "BDT"
+}
+```
 - **Used when**
-  - The guest clearly confirms they want to book and required booking fields are present.
+  - The guest clearly confirms they want to complete a booking.
 
 ### 1.6 Database Schema Design
 
 #### `listings`
-| Column | Type |
+| Column | Data type |
 |---|---|
 | `id` | `UUID PRIMARY KEY` |
 | `listing_code` | `VARCHAR(32) UNIQUE NOT NULL` |
@@ -122,7 +156,7 @@ Example guest message: **"I need a room in Cox's Bazar for 2 nights for 2 guests
 | `created_at` | `TIMESTAMPTZ NOT NULL` |
 
 #### `bookings`
-| Column | Type |
+| Column | Data type |
 |---|---|
 | `id` | `UUID PRIMARY KEY` |
 | `booking_code` | `VARCHAR(32) UNIQUE NOT NULL` |
@@ -137,7 +171,7 @@ Example guest message: **"I need a room in Cox's Bazar for 2 nights for 2 guests
 | `created_at` | `TIMESTAMPTZ NOT NULL` |
 
 #### `conversations`
-| Column | Type |
+| Column | Data type |
 |---|---|
 | `id` | `UUID PRIMARY KEY` |
 | `conversation_id` | `VARCHAR(64) NOT NULL` |
@@ -147,13 +181,113 @@ Example guest message: **"I need a room in Cox's Bazar for 2 nights for 2 guests
 | `tool_name` | `VARCHAR(80)` |
 | `created_at` | `TIMESTAMPTZ NOT NULL` |
 
-## Implementation Notes
-- FastAPI owns transport, validation, and persistence boundaries.
-- LangGraph owns routing, tool invocation, and safe escalation.
-- PostgreSQL owns listings, bookings, and full chat history.
-- OpenAI Responses API owns intent reasoning and structured tool selection.
+## Agent Skeleton Notes
+- `agent/state.py` uses `TypedDict` for the state object.
+- `agent/nodes.py` defines typed node functions with short docstrings.
+- `agent/tools.py` uses `@tool` decorators with Pydantic input schemas.
+- `agent/graph.py` defines the graph, conditional routing, and terminal edges.
 
 ## References
 - OpenAI Responses API: https://platform.openai.com/docs/api-reference/responses
-- OpenAI Tools Guide: https://platform.openai.com/docs/guides/tools?api-mode=responses
-- OpenAI Web Search Guide: https://platform.openai.com/docs/guides/tools-web-search?api-mode=responses
+- OpenAI Conversation State Guide: https://platform.openai.com/docs/guides/conversation-state?api-mode=responses
+- OpenAI Function Calling Guide: https://platform.openai.com/docs/guides/function-calling?api-mode=responses
+
+## Run Commands
+
+### 1. Start PostgreSQL and Redis
+```bash
+docker compose up -d
+```
+
+### 2. Create and activate a virtual environment
+```bash
+python -m venv venv
+```
+
+**Windows PowerShell**
+```bash
+.\venv\Scripts\Activate.ps1
+```
+
+### 3. Install dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Seed demo listing data
+```bash
+python scripts/seed_listings.py
+```
+
+### 5. Run the FastAPI application
+```bash
+uvicorn main:app --host 127.0.0.1 --port 8000
+```
+
+### 6. Open the app and API docs
+- Frontend: `http://127.0.0.1:8000/`
+- Swagger UI: `http://127.0.0.1:8000/docs`
+
+## API Testing Demo Payloads
+
+### Search request
+**Endpoint**
+```http
+POST /api/chat/conv-cxb-001/message
+```
+
+**Payload**
+```json
+{
+  "message": "I need a room in Cox's Bazar from 2026-05-14 to 2026-05-16 for 2 guests",
+  "guest_id": "guest-001"
+}
+```
+
+### Listing details request
+**Endpoint**
+```http
+POST /api/chat/conv-cxb-001/message
+```
+
+**Payload**
+```json
+{
+  "message": "Show details for SEA-201",
+  "guest_id": "guest-001"
+}
+```
+
+### Booking request
+**Endpoint**
+```http
+POST /api/chat/conv-cxb-001/message
+```
+
+**Payload**
+```json
+{
+  "message": "Book SEA-201 from 2026-05-14 to 2026-05-16 for 2 guests my name is Rahim Uddin rahim@example.com",
+  "guest_id": "guest-001"
+}
+```
+
+### Greeting request
+**Endpoint**
+```http
+POST /api/chat/conv-cxb-001/message
+```
+
+**Payload**
+```json
+{
+  "message": "Hello",
+  "guest_id": "guest-001"
+}
+```
+
+### Conversation history request
+**Endpoint**
+```http
+GET /api/chat/conv-cxb-001/history
+```
