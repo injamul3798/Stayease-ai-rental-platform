@@ -1,5 +1,9 @@
 # StayEase AI Booking Agent
 
+## Demo presentation of the system 
+https://github.com/user-attachments/assets/b29aaf9c-9641-47c8-864b-0ecd1e7ee068
+
+
 ## 1. Architecture Document
 
 ### 1.1 System Overview
