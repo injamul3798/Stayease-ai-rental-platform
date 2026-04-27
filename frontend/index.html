@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StayEase Chat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/frontend/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand-block">
+        <div class="brand-badge">SE</div>
+        <div>
+          <h1>StayEase</h1>
+          <p>AI booking assistant</p>
+        </div>
+      </div>
+
+      <div class="sidebar-card">
+        <span class="eyebrow">Active Conversation</span>
+        <p id="conversation-id" class="conversation-id">Loading…</p>
+        <button id="new-chat-button" class="secondary-button" type="button">Start New Chat</button>
+      </div>
+
+      <div class="sidebar-card">
+        <span class="eyebrow">What you can ask</span>
+        <ul class="tips-list">
+          <li>Search for stays in Bangladesh</li>
+          <li>Ask for listing details</li>
+          <li>Confirm a booking</li>
+        </ul>
+      </div>
+    </aside>
+
+    <main class="chat-panel">
+      <header class="chat-header">
+        <div>
+          <span class="eyebrow">Guest Messaging</span>
+          <h2>Find, review, and book your next stay</h2>
+        </div>
+        <div class="status-pill">
+          <span class="status-dot"></span>
+          <span>Connected</span>
+        </div>
+      </header>
+
+      <section id="error-banner" class="error-banner hidden" aria-live="polite"></section>
+
+      <section id="chat-log" class="chat-log" aria-live="polite">
+        <div id="empty-state" class="empty-state">
+          <h3>Start your StayEase chat</h3>
+          <p>Ask for a room in Cox's Bazar, listing details, or help confirming a booking.</p>
+        </div>
+      </section>
+
+      <div id="loading-indicator" class="loading-row hidden" aria-live="polite">
+        <div class="typing-indicator">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <span>StayEase is thinking…</span>
+      </div>
+
+      <form id="chat-form" class="composer">
+        <label class="composer-label" for="message-input">Message</label>
+        <div class="composer-row">
+          <textarea
+            id="message-input"
+            name="message"
+            rows="1"
+            maxlength="1200"
+            placeholder="Example: I need a room in Cox's Bazar from 2026-05-14 to 2026-05-16 for 2 guests"
+            required
+          ></textarea>
+          <button id="send-button" class="primary-button" type="submit">Send</button>
+        </div>
+      </form>
+    </main>
+  </div>
+
+  <script src="/frontend/app.js" defer></script>
+</body>
+</html>
