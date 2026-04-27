@@ -19,11 +19,11 @@ class SearchAvailablePropertiesInput(BaseModel):
 
 
 class GetListingDetailsInput(BaseModel):
-    listing_id: str = Field(..., description="Stable listing identifier such as SEA-201.")
+    listing_id: str = Field(..., description="Listing code (e.g., SEA-201) or property name.")
 
 
 class CreateBookingInput(BaseModel):
-    listing_id: str = Field(..., description="Listing identifier chosen by the guest.")
+    listing_id: str = Field(..., description="Listing code (e.g., SEA-201) or property name chosen by the guest.")
     check_in: date = Field(..., description="Booking start date in ISO format.")
     check_out: date = Field(..., description="Booking end date in ISO format.")
     guest_count: int = Field(..., ge=1, le=16, description="Total number of guests.")

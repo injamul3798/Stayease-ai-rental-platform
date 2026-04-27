@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from db.models import Booking, Listing
@@ -38,9 +38,19 @@ class BookingService:
         if check_out <= check_in:
             raise BookingValidationError("check_out must be after check_in")
 
-        listing = self.session.scalar(select(Listing).where(Listing.listing_code == listing_code))
+        listing = self.session.scalar(
+            select(Listing).where(
+                or_(
+                    Listing.listing_code == listing_code,
+                    Listing.title.ilike(f"%{listing_code}%"),
+                )
+            )
+        )
         if listing is None:
             raise BookingValidationError("listing not found")
+
+        resolved_listing_code = listing.listing_code
+
         if guest_count > listing.max_guests:
             raise BookingValidationError("guest_count exceeds listing capacity")
 
@@ -51,7 +61,7 @@ class BookingService:
             guest_count=guest_count,
         )
         available_codes = {item["listing_id"] for item in search_result["properties"]}
-        if listing_code not in available_codes:
+        if resolved_listing_code not in available_codes:
             raise BookingConflictError("listing is not available for the requested dates")
 
         total_nights = (check_out - check_in).days
@@ -73,7 +83,7 @@ class BookingService:
         return {
             "booking_id": booking.booking_code,
             "status": booking.status,
-            "listing_id": listing_code,
+            "listing_id": resolved_listing_code,
             "total_price_bdt": booking.total_price_bdt,
             "currency": "BDT",
         }

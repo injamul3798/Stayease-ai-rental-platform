@@ -57,8 +57,13 @@ class ListingService:
         ]
         return {"properties": properties, "count": len(properties)}
 
-    def get_listing_details(self, listing_code: str) -> dict[str, Any] | None:
-        statement = select(Listing).where(Listing.listing_code == listing_code)
+    def get_listing_details(self, listing_id_or_title: str) -> dict[str, Any] | None:
+        statement = select(Listing).where(
+            or_(
+                Listing.listing_code == listing_id_or_title,
+                Listing.title.ilike(f"%{listing_id_or_title}%"),
+            )
+        )
         listing = self.session.scalar(statement)
         if listing is None:
             return None
