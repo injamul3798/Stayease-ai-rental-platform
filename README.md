@@ -8,7 +8,7 @@ https://github.com/user-attachments/assets/9dd12cc5-603f-4efd-aa48-aa03ce748b1f
 ## 1. Architecture Document
 
 ### 1.1 System Overview
-StayEase is a focused guest messaging backend for a short-term rental platform in Bangladesh. A guest sends a message to the FastAPI backend, the request is passed into a LangGraph agent, and the agent uses the OpenAI Responses API to decide whether to search properties, return listing details, create a booking, or escalate unsupported requests to a human. PostgreSQL stores listings, bookings, and conversation history so the agent can respond with structured, stateful results.
+StayEase is a focused guest messaging backend for a short-term rental platform in Bangladesh. A guest sends a message to the FastAPI backend, the request is passed into a LangGraph orchestrator, and the agent uses the OpenAI Responses API with centralized prompts to decide whether to search properties, return listing details, create a booking, or escalate. Guests can identify properties by code (e.g., SEA-318) or by name (e.g., "Kolatoli Family Suite"). PostgreSQL stores listings, bookings, and conversation history.
 
 ```mermaid
 flowchart LR
@@ -37,7 +37,7 @@ Example user request: **"I need a room in Cox's Bazar for 2 nights for 2 guests.
    - `location = "Cox's Bazar"`
    - `guest_count = 2`
    - `stay_length = 2 nights`
-5. If the exact stay dates are already present in prior context, the graph continues directly to the search tool. If the start date is missing, the agent asks one short follow-up question, then resumes the same flow after the guest provides the date.
+5. If critical information is missing, the agent identifies **all** missing fields (e.g., dates, guest count, or name/email) and asks for them in a single, comprehensive message. The graph resumes the flow once the guest provides the missing details.
 6. The `search_available_properties` tool queries PostgreSQL for active listings in Cox's Bazar that:
    - match the location
    - can host at least 2 guests
@@ -104,7 +104,7 @@ Example user request: **"I need a room in Cox's Bazar for 2 nights for 2 guests.
 
 #### `get_listing_details`
 - **Input parameters**
-  - `listing_id: str`
+  - `listing_id: str` (Accepts listing code or property name)
 - **Output format**
 ```json
 {
@@ -124,7 +124,7 @@ Example user request: **"I need a room in Cox's Bazar for 2 nights for 2 guests.
 
 #### `create_booking`
 - **Input parameters**
-  - `listing_id: str`
+  - `listing_id: str` (Accepts listing code or property name)
   - `check_in: date`
   - `check_out: date`
   - `guest_count: int`
@@ -191,6 +191,7 @@ Example user request: **"I need a room in Cox's Bazar for 2 nights for 2 guests.
 - `agent/nodes.py` defines typed node functions with short docstrings.
 - `agent/tools.py` uses `@tool` decorators with Pydantic input schemas.
 - `agent/graph.py` defines the graph, conditional routing, and terminal edges.
+- `agent/prompts.py` contains centralized prompts for classification and response.
 
 ## References
 - OpenAI Responses API: https://platform.openai.com/docs/api-reference/responses
