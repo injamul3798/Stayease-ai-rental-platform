@@ -13,7 +13,7 @@ flowchart LR
     OpenAI[OpenAI Responses API]
     DB[(PostgreSQL)]
 
-    Guest -->|POST /api/chat/{conversation_id}/message| API
+    Guest -->|Send guest message| API
     API -->|load and save history| DB
     API -->|invoke agent| Graph
     Graph -->|reasoning and tool decisions| OpenAI
