@@ -14,17 +14,18 @@ StayEase is a focused guest messaging backend for a short-term rental platform i
 flowchart LR
     Guest[Guest / Frontend]
     API[FastAPI Backend]
-    Graph[LangGraph Agent]
+    Graph[LangGraph Orchestrator]
     OpenAI[OpenAI Responses API]
     DB[(PostgreSQL)]
 
     Guest -->|Send guest message| API
-    API -->|load and save history| DB
-    API -->|invoke agent| Graph
-    Graph -->|reasoning and tool decisions| OpenAI
-    Graph -->|search, details, booking data| DB
-    Graph -->|final reply| API
-    API -->|JSON response| Guest
+    API -->|Load/Save History| DB
+    API -->|Invoke Graph| Graph
+    Graph -->|Intent & Reasoning| OpenAI
+    Graph -->|Execute Tools| DB
+    Graph -->|Compose Reply| OpenAI
+    Graph -->|Final Answer| API
+    API -->|JSON Response| Guest
 ```
 
 ### 1.2 Conversation Flow
