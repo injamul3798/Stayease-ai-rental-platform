@@ -6,6 +6,10 @@ from typing import Any
 from langchain_core.tools import tool
 from pydantic import BaseModel, EmailStr, Field
 
+from db.session import get_session_factory
+from services.booking_service import BookingConflictError, BookingService, BookingValidationError
+from services.listing_service import ListingService
+
 
 class SearchAvailablePropertiesInput(BaseModel):
     location: str = Field(..., description="Bangladeshi city or area, such as Cox's Bazar or Dhanmondi.")
@@ -35,48 +39,35 @@ def search_available_properties(
     guest_count: int,
 ) -> dict[str, Any]:
     """Return available properties for a location, date range, and guest count."""
-    return {
-        "properties": [
-            {
-                "listing_id": "SEA-201",
-                "title": "Beach View Studio",
-                "location": location,
-                "price_bdt": 6800,
-                "currency": "BDT",
-                "max_guests": 2,
-                "available": True,
-            },
-            {
-                "listing_id": "SEA-318",
-                "title": "Kolatoli Family Suite",
-                "location": location,
-                "price_bdt": 8500,
-                "currency": "BDT",
-                "max_guests": 4,
-                "available": True,
-            },
-        ],
-        "count": 2,
-        "check_in": check_in.isoformat(),
-        "check_out": check_out.isoformat(),
-        "guest_count": guest_count,
-    }
+    session = get_session_factory()()
+    try:
+        listing_service = ListingService(session=session)
+        result = listing_service.search_available_properties(
+            location=location,
+            check_in=check_in,
+            check_out=check_out,
+            guest_count=guest_count,
+        )
+        result["check_in"] = check_in.isoformat()
+        result["check_out"] = check_out.isoformat()
+        result["guest_count"] = guest_count
+        return result
+    finally:
+        session.close()
 
 
 @tool(args_schema=GetListingDetailsInput)
 def get_listing_details(listing_id: str) -> dict[str, Any]:
     """Return one listing's details for display to the guest."""
-    return {
-        "listing_id": listing_id,
-        "title": "Beach View Studio",
-        "description": "A clean studio near the sea beach with balcony access.",
-        "location": "Cox's Bazar",
-        "nightly_price_bdt": 6800,
-        "amenities": ["WiFi", "AC", "Hot Water", "Breakfast"],
-        "max_guests": 2,
-        "check_in_time": "14:00",
-        "check_out_time": "11:00",
-    }
+    session = get_session_factory()()
+    try:
+        listing_service = ListingService(session=session)
+        result = listing_service.get_listing_details(listing_id)
+        if result is None:
+            return {"status": "error", "error": "listing not found", "listing_id": listing_id}
+        return result
+    finally:
+        session.close()
 
 
 @tool(args_schema=CreateBookingInput)
@@ -89,15 +80,18 @@ def create_booking(
     guest_email: EmailStr,
 ) -> dict[str, Any]:
     """Create a booking after the guest confirms the stay."""
-    return {
-        "booking_id": "BK-20260514-0001",
-        "status": "confirmed",
-        "listing_id": listing_id,
-        "guest_name": guest_name,
-        "guest_email": str(guest_email),
-        "guest_count": guest_count,
-        "check_in": check_in.isoformat(),
-        "check_out": check_out.isoformat(),
-        "total_price_bdt": 13600,
-        "currency": "BDT",
-    }
+    session = get_session_factory()()
+    try:
+        booking_service = BookingService(session=session)
+        return booking_service.create_booking(
+            listing_code=listing_id,
+            check_in=check_in,
+            check_out=check_out,
+            guest_count=guest_count,
+            guest_name=guest_name,
+            guest_email=str(guest_email),
+        )
+    except (BookingConflictError, BookingValidationError) as error:
+        return {"status": "error", "error": str(error), "listing_id": listing_id}
+    finally:
+        session.close()
