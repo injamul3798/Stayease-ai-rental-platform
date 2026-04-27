@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from agent.state import Intent
+ChatIntent = Literal["search", "details", "book", "general", "escalate"]
 
 
 class ChatMessageRequest(BaseModel):
@@ -15,7 +15,7 @@ class ChatMessageRequest(BaseModel):
 
 class ChatMessageResponse(BaseModel):
     conversation_id: str
-    intent: Intent
+    intent: ChatIntent
     reply: str
     tool_result: dict[str, Any] | None
     escalated: bool

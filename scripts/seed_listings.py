@@ -11,7 +11,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from db.models import Listing
-from db.session import SessionLocal, init_db
+from db.session import get_session_factory, init_db
 
 
 def seed_listings() -> None:
@@ -20,7 +20,7 @@ def seed_listings() -> None:
     seed_path = ROOT_DIR / "seed_data" / "listings.json"
     listings = json.loads(seed_path.read_text(encoding="utf-8"))
 
-    session = SessionLocal()
+    session = get_session_factory()()
     try:
         for item in listings:
             existing = session.scalar(select(Listing).where(Listing.listing_code == item["listing_code"]))

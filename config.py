@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -12,7 +13,7 @@ class Settings(BaseModel):
     log_level: str = "INFO"
     openai_api_key: str = ""
     openai_model: str = "gpt-4.1-mini"
-    database_url: str = Field(default="postgresql+psycopg://postgres:postgres@localhost:5432/stayease")
+    database_url: str = Field(default="postgresql+psycopg://postgres:postgres@127.0.0.1:5433/stayease")
     redis_url: str = Field(default="redis://localhost:6379/0")
     app_host: str = "127.0.0.1"
     app_port: int = 8000
@@ -20,6 +21,7 @@ class Settings(BaseModel):
 
     @classmethod
     def from_env(cls) -> "Settings":
+        _load_env_file()
         raw_cors = os.getenv("CORS_ORIGINS", "http://localhost:3000")
         cors_origins = _parse_cors_origins(raw_cors)
         try:
@@ -30,7 +32,7 @@ class Settings(BaseModel):
                 openai_model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
                 database_url=os.getenv(
                     "DATABASE_URL",
-                    "postgresql+psycopg://postgres:postgres@localhost:5432/stayease",
+                    "postgresql+psycopg://postgres:postgres@127.0.0.1:5433/stayease",
                 ),
                 redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
                 app_host=os.getenv("APP_HOST", "127.0.0.1"),
@@ -49,6 +51,19 @@ def _parse_cors_origins(raw_value: str) -> list[str]:
     except json.JSONDecodeError:
         pass
     return [item.strip() for item in raw_value.split(",") if item.strip()]
+
+
+def _load_env_file() -> None:
+    env_path = Path(__file__).resolve().parent / ".env"
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip())
 
 
 @lru_cache(maxsize=1)
