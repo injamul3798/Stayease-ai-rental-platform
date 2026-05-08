@@ -33,6 +33,10 @@ def create_app() -> FastAPI:
     def frontend_index() -> FileResponse:
         return FileResponse(FRONTEND_DIR / "index.html")
 
+    @app.get("/health", tags=["health"])
+    def health_check() -> dict[str, str]:
+        return {"status": "ok"}
+
     @app.on_event("startup")
     def on_startup() -> None:
         init_db()

@@ -172,7 +172,7 @@ function buildToolResult(toolResult, intent) {
         <h4>${escapeHtml(property.title)}</h4>
         <p>${escapeHtml(property.area)}, ${escapeHtml(property.location)}</p>
         <p>Fits up to ${property.max_guests} guests</p>
-        <span class="tool-pill">BDT ${property.price_bdt}/night · ${escapeHtml(property.listing_id)}</span>
+        <span class="tool-pill">BDT ${property.price_bdt}/night - ${escapeHtml(property.listing_id)}</span>
       `;
       container.appendChild(card);
     });
@@ -198,7 +198,7 @@ function buildToolResult(toolResult, intent) {
     card.innerHTML = `
       <h4>${escapeHtml(toolResult.title || "Listing Details")}</h4>
       <p>${escapeHtml(toolResult.area || "")}${toolResult.area ? ", " : ""}${escapeHtml(toolResult.location || "")}</p>
-      <p>BDT ${toolResult.nightly_price_bdt}/night · Max ${toolResult.max_guests} guests</p>
+      <p>BDT ${toolResult.nightly_price_bdt}/night - Max ${toolResult.max_guests} guests</p>
       ${amenities ? `<p>Amenities: ${escapeHtml(amenities)}</p>` : ""}
       <span class="tool-pill">${escapeHtml(toolResult.listing_id)}</span>
     `;
@@ -218,7 +218,7 @@ function formatMeta(message) {
     hour: "2-digit",
     minute: "2-digit",
   });
-  return `${roleLabel} · ${formattedTime}`;
+  return `${roleLabel} - ${formattedTime}`;
 }
 
 function setLoading(isLoading) {
